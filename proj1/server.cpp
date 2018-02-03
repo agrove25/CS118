@@ -1,14 +1,16 @@
-#define portno 9000
+#define portno 9001
 
 #include "server.h"
 
 #include <iostream>
 #include <sstream>
+#include <fstream>
 #include <cstring>
 
 
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/types.h>   // definitions of a number of data types used in socket.h and netinet/in.h
 #include <sys/socket.h>  // definitions of structures needed for sockets, e.g. sockaddr
 #include <netinet/in.h>  // constants and structures needed for internet domain addresses, e.g. sockaddr_in
@@ -26,6 +28,9 @@ Server::Server() {
 }
 
 Server::~Server() {
+  cout << "Closing..." << endl;
+
+  close(cli_fd);
   close(sockfd);
 }
 
@@ -44,7 +49,7 @@ void Server::createSocket() {
   serv_addr.sin_port = htons(portno);
 
   if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
-      cerr << "ERROR on binding" << endl;
+    cerr << "ERROR on binding: " << strerror(errno) <<  endl;
 
 }
 
@@ -62,26 +67,29 @@ void Server::startListening() {
     char buffer[2048];
 
     //do{
-      memset(buffer, 0, 2048);  // reset memory
+    memset(buffer, 0, 2048);  // reset memory
 
-      //read client's message
-      n = read(cli_fd, buffer, 2048);
-      if (n < 0) cerr << "ERROR reading from socket" << endl;
-      printf("%s", buffer);
-      //collector << buffer;
-      //collected = collector.str();
-      //} while(collected.length() > 0 && collected.substr(collected.length() - 4) != "\r\n\r\n");
-      string collected(buffer);
+    //read client's message
+    n = read(cli_fd, buffer, 2048);
+    if (n < 0){ cerr << "ERROR reading from socket: " << strerror(errno) << endl; return;}
+    printf("%s", buffer);
+    //collector << buffer;
+    //collected = collector.str();
+    //} while(collected.length() > 0 && collected.substr(collected.length() - 4) != "\r\n\r\n");
+    string collected(buffer);
     
     Request req = parseMessage(collected);
-    const char *response = respond(req).c_str();
+    char *response = respond(req);
 
     //reply to client
     //n = write(cli_fd, "I got your message\n", 19);
-    n = write(cli_fd, response, strlen(response));
+    n = write(cli_fd, response, sizeof(response));
     if (n < 0) cerr << "ERROR writing to socket" << endl;
 
-    shutdown(cli_fd, SHUT_WR);  // close connection
+    delete response;
+
+    //shutdown(cli_fd, SHUT_WR);  // close connection
+    close(cli_fd);
   }
 
   close(sockfd);
@@ -150,13 +158,17 @@ struct Server::Request Server::parseMessage(string buffer) {
   if (lines[0].substr(0, 3) == "GET") {
     req.filePath = lines[0].substr(4, lines[0].length() - 9);
 
-    // TODO: CASE INSENSITIVITY?
-
     string newfp = "";
     int space;
     
     while((space = req.filePath.find("%20")) != string::npos){
       newfp = req.filePath.replace(space, 3, " ");
+    }
+    int dot = newfp.find_last_of(".");
+    req.exten = "";
+    for(int i = dot + 1; i < newfp.length(); i++){
+      newfp[i] = tolower(newfp[i]);
+      req.exten += newfp[i];
     }
     
     /*for (int i = 0; i < req.filePath.length(); i++) {
@@ -175,30 +187,61 @@ struct Server::Request Server::parseMessage(string buffer) {
 
   }
 
+  cout << "Parsed!" << endl;
+
   return req;
 }
 
-string Server::respond(struct Request req) {
+char * Server::respond(struct Request req) {
   cout << req.filePath << endl;
-  int len = 0;
-  FILE *file = fopen(req.filePath.c_str(), "r");
-  if(file == NULL){
-    len = 5;
-  }
-  else{
-    fclose(file);
-  }
 
   ostringstream oss;
 
-  string status = "200 OK";//"404 Not Found";
-  oss << "Connection: close\r\n" << "Content-Length: " << len << /*"\r\nContent-Encoding:*/"\r\nContent-Type: text/html\r\n";
-  string headers = oss.str();
-  string body = "aaaa";
-  oss.str("");
-  oss << "HTTP/1.0 " << status << "\r\n" << headers << "\r\n" << body << "";
-  string response = oss.str();
+  string status = "200 OK";
+  int len = 0;
+  fstream file;
+  file.open(req.filePath.c_str());
+  char *body = new char[0];
+  if(file.fail()){
+    status = "404 Not Found";
+  }
+  else{
+    char *bodbuf = new char[1024];
+    char *acc = new char[1024];
+    while(!file.fail()){
+      file.read(bodbuf, 1024);
+      char *newacc = new char[len + 1024];
+      memcpy(newacc, acc, len);
+      delete [] acc;
+      acc = newacc;
+      memcpy(acc + len, bodbuf, 1024);
+      
+      len += 1024;
+    }
+    delete [] bodbuf;
+    len -= 1024;
+    len += file.gcount();
+    body = new char[len];
+    memcpy(body, acc, len);
+    file.close();
+  }
 
-  cout << response << "End\n";
+  string type = "octet-stream";
+  if(req.exten == "html" || req.exten == "htm"){
+    type = "text/html";
+  }
+  else if(req.exten == "jpg" || req.exten == "jpeg" || req.exten == "gif"){
+    type = "image";
+  }
+  oss << "Content-Length: " << len << "\r\nContent-Type: " << type << "\r\n";
+  string headers = oss.str();
+
+  oss.str("");
+  oss << "HTTP/1.1 " << status << "\r\n" << headers << "\r\n";
+  string resphead = oss.str();
+
+  char *response = new char[resphead.length() + len];
+  strcpy(response, resphead.c_str());
+  memcpy(response + resphead.length(), body, len);
   return response;
 }

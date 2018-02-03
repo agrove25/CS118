@@ -20,11 +20,12 @@ public:
 private:
   struct Request{
     string filePath;
+    string exten;
   };
 
   void createSocket();
   struct Request parseMessage(string s);
-  string respond(struct Request req);
+  char * respond(struct Request req);
 
   int sockfd;
   struct sockaddr_in serv_addr;
