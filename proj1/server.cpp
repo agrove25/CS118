@@ -1,4 +1,4 @@
-#define portno 8081
+#define portno 8080
 
 #include "server.h"
 
@@ -138,7 +138,12 @@ struct Server::Request Server::parseMessage(char buffer[]) {
 
   if (lines[0].substr(0, 3) == "GET") {
     req.filePath = lines[0].substr(4, lines[0].length() - 13);
+
+    // TODO: CASE INSENSITIVITY?
+
     cout << req.filePath << endl;
+
+
   }
 
   return req;
