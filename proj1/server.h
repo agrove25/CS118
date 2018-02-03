@@ -23,8 +23,8 @@ private:
   };
 
   void createSocket();
-  struct Request parseMessage(char[]);
-  void respond(struct Request req);
+  struct Request parseMessage(string s);
+  string respond(struct Request req);
 
   int sockfd;
   struct sockaddr_in serv_addr;

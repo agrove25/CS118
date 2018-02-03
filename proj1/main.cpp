@@ -3,6 +3,5 @@
 int main() {
   Server serv = Server();
   serv.startListening();
-
   return 0;
 }

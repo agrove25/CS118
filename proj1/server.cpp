@@ -1,8 +1,9 @@
-#define portno 8080
+#define portno 9000
 
 #include "server.h"
 
 #include <iostream>
+#include <sstream>
 #include <cstring>
 
 
@@ -22,11 +23,10 @@ Server::Server() {
   n_cli = 0;
 
   cout << "Server initialized..." << endl << endl;
-
 }
 
 Server::~Server() {
-
+  close(sockfd);
 }
 
 void Server::createSocket() {
@@ -57,23 +57,31 @@ void Server::startListening() {
     cli_fd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
 
     int n;
+    ostringstream collector;
+    //string collected;
     char buffer[2048];
 
-    memset(buffer, 0, 2048);  // reset memory
+    //do{
+      memset(buffer, 0, 2048);  // reset memory
 
-    //read client's message
-    n = read(cli_fd, buffer, 2048);
-    if (n < 0) cerr << "ERROR reading from socket" << endl;
-    printf("%s", buffer);
+      //read client's message
+      n = read(cli_fd, buffer, 2048);
+      if (n < 0) cerr << "ERROR reading from socket" << endl;
+      printf("%s", buffer);
+      //collector << buffer;
+      //collected = collector.str();
+      //} while(collected.length() > 0 && collected.substr(collected.length() - 4) != "\r\n\r\n");
+      string collected(buffer);
+    
+    Request req = parseMessage(collected);
+    const char *response = respond(req).c_str();
 
     //reply to client
-    n = write(cli_fd, "I got your message\n", 19);
+    //n = write(cli_fd, "I got your message\n", 19);
+    n = write(cli_fd, response, strlen(response));
     if (n < 0) cerr << "ERROR writing to socket" << endl;
 
-    Request req = parseMessage(buffer);
-    respond(req);
-
-    close(cli_fd);  // close connection
+    shutdown(cli_fd, SHUT_WR);  // close connection
   }
 
   close(sockfd);
@@ -109,7 +117,7 @@ void Server::startListening() {
 
 }
 
-struct Server::Request Server::parseMessage(char buffer[]) {
+struct Server::Request Server::parseMessage(string buffer) {
   struct Request req;
 
   cout << "Attempting to parse message..." << endl;
@@ -121,6 +129,9 @@ struct Server::Request Server::parseMessage(char buffer[]) {
     char c = buffer[i];
 
     if (c == '\r') {
+      if(line == ""){
+	break;
+      }
       lines.push_back(line);
       line = "";
     }
@@ -137,14 +148,18 @@ struct Server::Request Server::parseMessage(char buffer[]) {
   }
 
   if (lines[0].substr(0, 3) == "GET") {
-    req.filePath = lines[0].substr(4, lines[0].length() - 13);
+    req.filePath = lines[0].substr(4, lines[0].length() - 9);
 
     // TODO: CASE INSENSITIVITY?
 
     string newfp = "";
-
-
-    for (int i = 0; i < req.filePath.length(); i++) {
+    int space;
+    
+    while((space = req.filePath.find("%20")) != string::npos){
+      newfp = req.filePath.replace(space, 3, " ");
+    }
+    
+    /*for (int i = 0; i < req.filePath.length(); i++) {
       if (i < req.filePath.length() - 2 && req.filePath[i] == '%' && req.filePath[i + 1] == '2' && req.filePath[i + 2] == '0') {
         newfp += " ";
         i += 2;
@@ -152,7 +167,7 @@ struct Server::Request Server::parseMessage(char buffer[]) {
       }
 
       newfp += req.filePath[i];
-    }
+    }*/
 
     req.filePath = newfp;
     cout << req.filePath << endl;
@@ -163,6 +178,27 @@ struct Server::Request Server::parseMessage(char buffer[]) {
   return req;
 }
 
-void Server::respond(struct Request req) {
+string Server::respond(struct Request req) {
   cout << req.filePath << endl;
+  int len = 0;
+  FILE *file = fopen(req.filePath.c_str(), "r");
+  if(file == NULL){
+    len = 5;
+  }
+  else{
+    fclose(file);
+  }
+
+  ostringstream oss;
+
+  string status = "200 OK";//"404 Not Found";
+  oss << "Connection: close\r\n" << "Content-Length: " << len << /*"\r\nContent-Encoding:*/"\r\nContent-Type: text/html\r\n";
+  string headers = oss.str();
+  string body = "aaaa";
+  oss.str("");
+  oss << "HTTP/1.0 " << status << "\r\n" << headers << "\r\n" << body << "";
+  string response = oss.str();
+
+  cout << response << "End\n";
+  return response;
 }
