@@ -141,6 +141,20 @@ struct Server::Request Server::parseMessage(char buffer[]) {
 
     // TODO: CASE INSENSITIVITY?
 
+    string newfp = "";
+
+
+    for (int i = 0; i < req.filePath.length(); i++) {
+      if (i < req.filePath.length() - 2 && req.filePath[i] == '%' && req.filePath[i + 1] == '2' && req.filePath[i + 2] == '0') {
+        newfp += " ";
+        i += 2;
+        continue;
+      }
+
+      newfp += req.filePath[i];
+    }
+
+    req.filePath = newfp;
     cout << req.filePath << endl;
 
 
