@@ -25,7 +25,7 @@ private:
 
   void createSocket();
   struct Request parseMessage(string s);
-  char * respond(struct Request req);
+  char * respond(struct Request req, int &resplen);
 
   int sockfd;
   struct sockaddr_in serv_addr;

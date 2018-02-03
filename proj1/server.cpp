@@ -1,4 +1,4 @@
-#define portno 9001
+#define portno 9008
 
 #include "server.h"
 
@@ -79,11 +79,12 @@ void Server::startListening() {
     string collected(buffer);
     
     Request req = parseMessage(collected);
-    char *response = respond(req);
+    int resplen = 0;
+    char *response = respond(req, resplen);
 
     //reply to client
     //n = write(cli_fd, "I got your message\n", 19);
-    n = write(cli_fd, response, sizeof(response));
+    n = write(cli_fd, response, resplen);
     if (n < 0) cerr << "ERROR writing to socket" << endl;
 
     delete response;
@@ -156,13 +157,16 @@ struct Server::Request Server::parseMessage(string buffer) {
   }
 
   if (lines[0].substr(0, 3) == "GET") {
-    req.filePath = lines[0].substr(4, lines[0].length() - 9);
+    cout << "GETting" << endl;
+    req.filePath = lines[0].substr(4, lines[0].length() - 13);
+    cout << "this: " << req.filePath << endl;
 
-    string newfp = "";
+    string newfp = ".";
+    newfp += req.filePath;
     int space;
     
-    while((space = req.filePath.find("%20")) != string::npos){
-      newfp = req.filePath.replace(space, 3, " ");
+    while((space = newfp.find("%20")) != string::npos){
+      newfp = newfp.replace(space, 3, " ");
     }
     int dot = newfp.find_last_of(".");
     req.exten = "";
@@ -182,7 +186,7 @@ struct Server::Request Server::parseMessage(string buffer) {
     }*/
 
     req.filePath = newfp;
-    cout << req.filePath << endl;
+    cout << "Path: " << req.filePath << endl;
 
 
   }
@@ -192,7 +196,8 @@ struct Server::Request Server::parseMessage(string buffer) {
   return req;
 }
 
-char * Server::respond(struct Request req) {
+char * Server::respond(struct Request req, int &resplen) {
+  cout << "Responding..." << endl;
   cout << req.filePath << endl;
 
   ostringstream oss;
@@ -201,11 +206,14 @@ char * Server::respond(struct Request req) {
   int len = 0;
   fstream file;
   file.open(req.filePath.c_str());
+  cout << "Opening file..." << endl;
   char *body = new char[0];
   if(file.fail()){
+    cout << "No file" << endl;
     status = "404 Not Found";
   }
   else{
+    cout << "File found" << endl;
     char *bodbuf = new char[1024];
     char *acc = new char[1024];
     while(!file.fail()){
@@ -240,8 +248,12 @@ char * Server::respond(struct Request req) {
   oss << "HTTP/1.1 " << status << "\r\n" << headers << "\r\n";
   string resphead = oss.str();
 
-  char *response = new char[resphead.length() + len];
+  cout << "resphead:\n" << resphead << endl;
+
+  char *response = new char[resphead.length() + len + 1];
   strcpy(response, resphead.c_str());
   memcpy(response + resphead.length(), body, len);
+  resplen = resphead.length() + len;
+  printf("Response:\n%sEnd\n", response);
   return response;
 }
