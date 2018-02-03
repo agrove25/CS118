@@ -2,6 +2,7 @@
 #define server_h
 
 #include <vector>
+#include <string>
 
 #include <sys/types.h>   // definitions of a number of data types used in socket.h and netinet/in.h
 #include <sys/socket.h>  // definitions of structures needed for sockets, e.g. sockaddr
@@ -17,14 +18,25 @@ public:
   void startListening();
 
 private:
+  struct Request{
+    string filePath;
+  };
+
   void createSocket();
+  struct Request parseMessage(char[]);
+  void respond(struct Request req);
 
   int sockfd;
   struct sockaddr_in serv_addr;
 
   int n_cli;
-  vector<int> cli_fd;
-  vector<struct sockaddr_in> cli_addrs;
+  int cli_fd;
+  struct sockaddr_in cli_addr;
+
+
+  // for asynchronous connections
+  //vector<int> cli_fd;
+  //vector<struct sockaddr_in> cli_addrs;
 
 
 

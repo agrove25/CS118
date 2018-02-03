@@ -1,4 +1,4 @@
-#define portno 8080
+#define portno 8081
 
 #include "server.h"
 
@@ -21,43 +21,12 @@ Server::Server() {
 
   n_cli = 0;
 
-  cout << "Server Initialized..." << endl;
+  cout << "Server initialized..." << endl << endl;
 
 }
 
 Server::~Server() {
 
-}
-
-void Server::startListening() {
-  listen(sockfd, 5);  // 5 simultaneous connection at most
-
-  socklen_t clilen;    // not entirely sure what this for..
-  cli_fd.resize(n_cli + 1); // creating room for more clients
-  cli_fd[n_cli] = accept(sockfd, (struct sockaddr *) &cli_addrs[n_cli], &clilen);
-  n_cli++;
-
-  // TODO: ASYNCHRONOUS IO USING SELECT? OR POLL? OR FORK?
-
-  if (cli_fd[0] < 0)
-   cerr << "ERROR on accept" << endl;
-
-  int n;
-  char buffer[256];
-
-  memset(buffer, 0, 256);  // reset memory
-
-  //read client's message
-  n = read(cli_fd[0], buffer, 255);
-  if (n < 0) cerr << "ERROR reading from socket" << endl;
-  printf("Here is the message: %s\n", buffer);
-
-  //reply to client
-  n = write(cli_fd[0], "I got your message", 18);
-  if (n < 0) cerr << "ERROR writing to socket" << endl;
-
-  close(cli_fd[0]);  // close connection
-  close(sockfd);
 }
 
 void Server::createSocket() {
@@ -77,5 +46,104 @@ void Server::createSocket() {
   if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
       cerr << "ERROR on binding" << endl;
 
+}
 
+void Server::startListening() {
+  listen(sockfd, 5);  // 5 simultaneous connection at most
+
+  socklen_t clilen;    // not entirely sure what this for..
+
+  while (1) {
+    cli_fd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+
+    int n;
+    char buffer[2048];
+
+    memset(buffer, 0, 2048);  // reset memory
+
+    //read client's message
+    n = read(cli_fd, buffer, 2048);
+    if (n < 0) cerr << "ERROR reading from socket" << endl;
+    printf("%s", buffer);
+
+    //reply to client
+    n = write(cli_fd, "I got your message\n", 19);
+    if (n < 0) cerr << "ERROR writing to socket" << endl;
+
+    Request req = parseMessage(buffer);
+    respond(req);
+
+    close(cli_fd);  // close connection
+  }
+
+  close(sockfd);
+
+  /* ASYNCHRNOUS?
+  socklen_t clilen;    // not entirely sure what this for..
+  cli_fd.resize(n_cli + 1); // creating room for more clients
+  cli_fd[n_cli] = accept(sockfd, (struct sockaddr *) &cli_addrs[n_cli], &clilen);
+  n_cli++;
+
+  // TODO: ASYNCHRONOUS IO USING SELECT? OR POLL? OR FORK?
+
+  if (cli_fd[0] < 0)
+   cerr << "ERROR on accept" << endl;
+
+    int n;
+    char buffer[2048];
+
+    memset(buffer, 0, 2048);  // reset memory
+
+    //read client's message
+    n = read(cli_fd[0], buffer, 2048);
+    if (n < 0) cerr << "ERROR reading from socket" << endl;
+    printf("%s", buffer);
+
+    //reply to client
+    n = write(cli_fd[0], "I got your message\n", 19);
+    if (n < 0) cerr << "ERROR writing to socket" << endl;
+
+    close(cli_fd[0]);  // close connection
+  }
+    */
+
+}
+
+struct Server::Request Server::parseMessage(char buffer[]) {
+  struct Request req;
+
+  cout << "Attempting to parse message..." << endl;
+
+  vector<string> lines;
+  string line = "";
+
+  for (int i = 0; i < 2048; i++) {
+    char c = buffer[i];
+
+    if (c == '\r') {
+      lines.push_back(line);
+      line = "";
+    }
+    else if (c != '\0' && c != '\r' && c != '\n') {
+      line += c;
+    }
+    else if (c == '\0'){
+      break;
+    }
+  }
+
+  for (int i = 0; i < lines.size(); i++) {
+    cout << lines[i] << endl;
+  }
+
+  if (lines[0].substr(0, 3) == "GET") {
+    req.filePath = lines[0].substr(4, lines[0].length() - 13);
+    cout << req.filePath << endl;
+  }
+
+  return req;
+}
+
+void Server::respond(struct Request req) {
+  cout << req.filePath << endl;
 }
